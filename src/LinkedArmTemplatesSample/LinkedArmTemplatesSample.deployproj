@@ -1,0 +1,49 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|AnyCPU">
+      <Configuration>Debug</Configuration>
+      <Platform>AnyCPU</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|AnyCPU">
+      <Configuration>Release</Configuration>
+      <Platform>AnyCPU</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>a97b4737-eb2b-438f-85d4-817d7293404b</ProjectGuid>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFrameworkIdentifier>Deployment</TargetFrameworkIdentifier>
+    <TargetFrameworkVersion>1.0</TargetFrameworkVersion>
+    <PrepareForBuildDependsOn>
+    </PrepareForBuildDependsOn>
+  </PropertyGroup>
+  <Import Condition=" Exists('Deployment.targets') " Project="Deployment.targets" />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" />
+  <!-- vertag<:>start tokens<:>maj.min -->
+  <Import Condition=" Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Deployment\1.1\DeploymentProject.targets') " Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Deployment\1.1\DeploymentProject.targets" />
+  <!-- vertag<:>end -->
+  <ItemGroup>
+    <None Include="Deployment.targets">
+      <Visible>False</Visible>
+    </None>
+    <None Include="Scripts\Create-ResourceGroup.ps1" />
+    <None Include="Scripts\Deploy-Resources.ps1" />
+    <None Include="Scripts\Upload-Templates.ps1" />
+    <None Include="Templates\app-deployment-web.params.json" />
+    <None Include="Templates\app-deployment.json" />
+    <None Include="Templates\base-deployment.json" />
+    <None Include="Templates\base-deployment.params.json" />
+    <None Include="Templates\master-deployment-without-parameters.json" />
+    <None Include="Templates\master-deployment.json" />
+    <None Include="Templates\sql-deployment.json" />
+    <None Include="Templates\sql-deployment.params.json" />
+  </ItemGroup>
+  <Target Name="GetReferenceAssemblyPaths" />
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties Templates_4app-deployment-web_1params_1json__JSONSchema="" />
+    </VisualStudio>
+  </ProjectExtensions>
+</Project>

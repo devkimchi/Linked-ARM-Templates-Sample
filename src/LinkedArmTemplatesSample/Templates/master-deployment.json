@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": [
+        "dev", "test", "pprd", "prod"
+      ],
+      "metadata": {
+        "description": "Runtime environment"
+      }
+    },
+    "sasToken": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Storage Account access token"
+      }
+    }
+  },
+  "variables": {
+    "baseTemplateUrl": "[concat('https://sa0', parameters('environment'), '.blob.core.windows.net/templates/')]",
+    "linkedTemplates": [
+      {
+        "name": "web-template",
+        "templateUrl": "[concat(variables('baseTemplateUrl'), 'app-deployment.json')]",
+        "parameterUrl": "[concat(variables('baseTemplateUrl'), 'app-deployment-web.params.json')]"
+      },
+      {
+        "name": "sql-template",
+        "templateUrl": "[concat(variables('baseTemplateUrl'), 'sql-deployment.json')]",
+        "parameterUrl": "[concat(variables('baseTemplateUrl'), 'sql-deployment.params.json')]"
+      }
+    ]
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-01-01",
+      "name": "[concat('nestedTemplate-', variables('linkedTemplates')[copyIndex()].name)]",
+      "type": "Microsoft.Resources/deployments",
+      "copy": {
+        "name": "templatesCopy",
+        "count": "[length(variables('linkedTemplates'))]"
+      },
+      "properties": {
+        "mode": "Incremental", 
+        "templateLink": {
+          "uri": "[concat(variables('linkedTemplates')[copyIndex()].templateUrl, parameters('sasToken'))]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parametersLink": {
+          "uri": "[concat(variables('linkedTemplates')[copyIndex()].parameterUrl, parameters('sasToken'))]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "environment": "[parameters('environment')]"
+        }
+      }
+    }
+  ]
+}

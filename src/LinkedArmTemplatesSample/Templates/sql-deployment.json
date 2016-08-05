@@ -1,0 +1,131 @@
+﻿{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "test",
+        "pprd",
+        "prod"
+      ]
+    },
+    "administratorLogin": {
+      "type": "string",
+      "metadata": {
+        "description": "The admin user of the SQL Server"
+      }
+    },
+    "administratorLoginPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The password of the admin user of the SQL Server"
+      }
+    },
+    "databases": {
+      "type": "array",
+      "metadata": {
+        "description": "List of database names"
+      }
+    },
+    "collation": {
+      "type": "string",
+      "defaultValue": "SQL_Latin1_General_CP1_CI_AS",
+      "metadata": {
+        "description": "The database collation for governing the proper use of characters."
+      }
+    },
+    "edition": {
+      "type": "string",
+      "defaultValue": "Standard",
+      "allowedValues": [
+        "Basic",
+        "Standard",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "The type of database to create."
+      }
+    },
+    "maxSizeBytes": {
+      "type": "string",
+      "defaultValue": "1073741824",
+      "metadata": {
+        "description": "The maximum size, in bytes, for the database"
+      }
+    },
+    "requestedServiceObjectiveName": {
+      "type": "string",
+      "defaultValue": "S1",
+      "allowedValues": [
+        "Basic",
+        "S0",
+        "S1",
+        "S2",
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "metadata": {
+        "description": "Describes the performance level for Edition"
+      }
+    }
+  },
+  "variables": {
+    "sqlserverName": "[concat('sql-', parameters('environment'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2014-04-01-preview",
+      "name": "[variables('sqlserverName')]",
+      "type": "Microsoft.Sql/servers",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "dbsCopy",
+        "count": "[length(parameters('databases'))]"
+      },
+      "tags": {
+        "displayName": "[variables('sqlserverName')]"
+      },
+      "properties": {
+        "administratorLogin": "[parameters('administratorLogin')]",
+        "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+        "version": "12.0"
+      },
+      "resources": [
+        {
+          "apiVersion": "2014-04-01-preview",
+          "name": "AllowAllWindowsAzureIps",
+          "type": "firewallrules",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('sqlserverName')]"
+          ],
+          "properties": {
+            "endIpAddress": "0.0.0.0",
+            "startIpAddress": "0.0.0.0"
+          }
+        },
+        {
+          "apiVersion": "2014-04-01-preview",
+          "name": "[concat(parameters('databases')[copyIndex()], '-db-', parameters('environment'))]",
+          "type": "databases",
+          "location": "[resourceGroup().location]",
+          "tags": {
+            "displayName": "[concat(parameters('databases')[copyIndex()], '-db-', parameters('environment'))]"
+          },
+          "dependsOn": [
+            "[variables('sqlserverName')]"
+          ],
+          "properties": {
+            "edition": "[parameters('edition')]",
+            "collation": "[parameters('collation')]",
+            "maxSizeBytes": "[parameters('maxSizeBytes')]",
+            "requestedServiceObjectiveName": "[parameters('requestedServiceObjectiveName')]"
+          }
+        }
+      ]
+    }
+  ]
+}

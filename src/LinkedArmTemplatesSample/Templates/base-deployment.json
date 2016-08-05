@@ -1,0 +1,54 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": [
+        "dev", "test", "prod"
+      ],
+      "metadata": {
+        "description": "Runtime environment"
+      }
+    },
+    "storageAccountType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_ZRS",
+        "Premium_LRS"
+      ],
+      "metadata": {
+        "description": "Storage Account type"
+      }
+    }
+  },
+  "variables": {
+    "storageAccountName": "[concat('sa0', parameters('environment'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2016-01-01",
+      "name": "[variables('storageAccountName')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "StorageAccount"
+      },
+      "sku": {
+        "name": "[parameters('storageAccountType')]"
+      },
+      "kind": "Storage",
+      "properties": {}
+    }
+  ],
+  "outputs": {
+    "storageAccountName" : {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    }
+  }
+}

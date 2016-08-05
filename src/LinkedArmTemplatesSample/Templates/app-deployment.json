@@ -1,0 +1,357 @@
+﻿{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "test",
+        "pprd",
+        "prod"
+      ]
+    },
+    "pricingTier": {
+      "type": "string",
+      "defaultValue": "S1",
+      "allowedValues": [
+        "F1",
+        "D1",
+        "B1",
+        "B2",
+        "B3",
+        "S1",
+        "S2",
+        "S3",
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
+      "metadata": {
+        "description": "Describes plan's pricing tier and instance size. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/"
+      }
+    },
+    "tierInstanceSize": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "metadata": {
+        "description": "Describes plan's instance count"
+      }
+    },
+    "apps": {
+      "type": "array",
+      "metadata": {
+        "description": "List of web apps"
+      }
+    },
+    "kind": {
+      "type": "string",
+      "allowedValues": [ "web", "api" ],
+      "metadata": {
+        "description": "Type of web app"
+      }
+    },
+    "enableClientAffinityCookie": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Affinity cookie - true for web app, false for API app"
+      }
+    }
+  },
+  "variables": {
+    "appServicePlanName": "[concat('asp-', parameters('environment'))]",
+    "autoScaling": "[concat('Autoscaling-', variables('appServicePlanName'))]",
+    "cpuHighAlert": "[concat('CpuHigh-', variables('appServicePlanName'))]",
+    "longHttpQueueAlert": "[concat('LongHttpQueue-', variables('appServicePlanName'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-08-01",
+      "name": "[variables('appServicePlanName')]",
+      "type": "Microsoft.Web/serverfarms",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[variables('appServicePlanName')]"
+      },
+      "sku": {
+        "name": "[parameters('pricingTier')]",
+        "capacity": "[parameters('tierInstanceSize')]"
+      },
+      "properties": {
+        "name": "[variables('appServicePlanName')]"
+      }
+    },
+    {
+      "apiVersion": "2015-08-01",
+      "name": "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+      "type": "Microsoft.Web/sites",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "appsCopy",
+        "count": "[length(parameters('apps'))]"
+      },
+      "dependsOn": [
+        "[variables('appServicePlanName')]"
+      ],
+      "tags": {
+        "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName')))]": "empty",
+        "displayName": "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      },
+      "kind": "[parameters('kind')]",
+      "properties": {
+        "name": "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "clientAffinityEnabled": "[parameters('enableClientAffinityCookie')]"
+      },
+      "resources": [
+        {
+          "apiVersion": "2015-08-01",
+          "type": "config",
+          "name": "web",
+          "dependsOn": [
+            "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+          ],
+          "properties": {
+            "remoteDebuggingEnabled": true,
+            "remoteDebuggingVersion": "VS2015",
+            "use32BitWorkerProcess": false,
+            "alwaysOn": true
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[variables('autoScaling')]",
+      "type": "Microsoft.Insights/autoscalesettings",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName')))]": "Resource",
+        "displayName": "[variables('autoScaling')]"
+      },
+      "dependsOn": [
+        "[variables('appServicePlanName')]"
+      ],
+      "properties": {
+        "profiles": [
+          {
+            "name": "Default",
+            "capacity": {
+              "minimum": 1,
+              "maximum": 2,
+              "default": 1
+            },
+            "rules": [
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": 80.0
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": 1,
+                  "cooldown": "PT10M"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT1H",
+                  "timeAggregation": "Average",
+                  "operator": "LessThan",
+                  "threshold": 60.0
+                },
+                "scaleAction": {
+                  "direction": "Decrease",
+                  "type": "ChangeCount",
+                  "value": 1,
+                  "cooldown": "PT1H"
+                }
+              }
+            ]
+          }
+        ],
+        "enabled": true,
+        "name": "[variables('autoScaling')]",
+        "targetResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      }
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[variables('cpuHighAlert')]",
+      "type": "Microsoft.Insights/alertrules",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('appServicePlanName')]"
+      ],
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName')))]": "Resource",
+        "displayName": "[variables('cpuHighAlert')]"
+      },
+      "properties": {
+        "name": "[variables('cpuHighAlert')]",
+        "description": "[concat('The average CPU is high across all the instances of ', variables('appServicePlanName'))]",
+        "isEnabled": true,
+        "condition": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+          "dataSource": {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+            "resourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+            "metricName": "CpuPercentage"
+          },
+          "operator": "GreaterThan",
+          "threshold": 90,
+          "windowSize": "PT15M"
+        },
+        "action": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+          "sendToServiceOwners": true,
+          "customEmails": [ ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[variables('longHttpQueueAlert')]",
+      "type": "Microsoft.Insights/alertrules",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('appServicePlanName')]"
+      ],
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName')))]": "Resource",
+        "displayName": "[variables('longHttpQueueAlert')]"
+      },
+      "properties": {
+        "name": "[variables('longHttpQueueAlert')]",
+        "description": "[concat('The HTTP queue for the instances of ', variables('appServicePlanName'), ' has a large number of pending requests.')]",
+        "isEnabled": true,
+        "condition": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+          "dataSource": {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+            "resourceUri": "[concat(resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', variables('appServicePlanName'))]",
+            "metricName": "HttpQueueLength"
+          },
+          "operator": "GreaterThan",
+          "threshold": 100.0,
+          "windowSize": "PT5M"
+        },
+        "action": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+          "sendToServiceOwners": true,
+          "customEmails": [ ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[concat('ServerErrors-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+      "type": "Microsoft.Insights/alertrules",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "appsCopy",
+        "count": "[length(parameters('apps'))]"
+      },
+      "dependsOn": [
+        "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      ],
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))))]": "Resource",
+        "displayName": "[concat('ServerErrors-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      },
+      "properties": {
+        "name": "[concat('ServerErrors-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+        "description": "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'), ' has some server errors, status code 5xx.')]",
+        "isEnabled": true,
+        "condition": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+          "dataSource": {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+            "resourceUri": "[resourceId('Microsoft.Web/sites', concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment')))]",
+            "metricName": "Http5xx"
+          },
+          "operator": "GreaterThan",
+          "threshold": 0.0,
+          "windowSize": "PT5M"
+        },
+        "action": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+          "sendToServiceOwners": true,
+          "customEmails": [ ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[concat('ForbiddenRequests-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+      "type": "Microsoft.Insights/alertrules",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "appsCopy",
+        "count": "[length(parameters('apps'))]"
+      },
+      "dependsOn": [
+        "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      ],
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))))]": "Resource",
+        "displayName": "[concat('ForbiddenRequests-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      },
+      "properties": {
+        "name": "[concat('ForbiddenRequests-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+        "description": "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'), ' has some requests that are forbidden, status code 403.')]",
+        "isEnabled": true,
+        "condition": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+          "dataSource": {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+            "resourceUri": "[resourceId('Microsoft.Web/sites', concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment')))]",
+            "metricName": "Http403"
+          },
+          "operator": "GreaterThan",
+          "threshold": 0,
+          "windowSize": "PT5M"
+        },
+        "action": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+          "sendToServiceOwners": true,
+          "customEmails": [ ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[concat('ai-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]",
+      "type": "Microsoft.Insights/components",
+      "location": "Central US",
+      "copy": {
+        "name": "appsCopy",
+        "count": "[length(parameters('apps'))]"
+      },
+      "dependsOn": [
+        "[concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      ],
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', concat(parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))))]": "Resource",
+        "displayName": "[concat('ai-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      },
+      "properties": {
+        "ApplicationId": "[concat('ai-', parameters('apps')[copyIndex()], '-', parameters('kind'), '-', parameters('environment'))]"
+      }
+    }
+  ]
+}
