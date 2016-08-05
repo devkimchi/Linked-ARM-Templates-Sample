@@ -53,7 +53,6 @@ foreach($template in $templates)
 }
 
 Remove-Variable segments
-Remove-Variable prjName
 Remove-Variable envName
 Remove-Variable json
 Remove-Variable templates
